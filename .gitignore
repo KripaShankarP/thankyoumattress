@@ -1,0 +1,9 @@
+# Each app (frontend/, backend/, admin/) has its own .gitignore too
+node_modules/
+.DS_Store
+.vscode/
+.idea/
+*.log
+.env
+.env.*
+!.env.example

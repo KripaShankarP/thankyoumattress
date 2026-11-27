@@ -1,0 +1,399 @@
+// Thankyou Mattresses — database schema (PostgreSQL)
+//
+// Money is stored as whole rupees (Int). Selling price = MRP − offer % (from Setting),
+// so changing the offer never needs a price update. Orders copy every price/name they
+// used at checkout, so later catalogue edits never change an old bill.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/* ───────────────────────────── Catalogue ───────────────────────────── */
+
+enum Category {
+  MATTRESS
+  PILLOW
+}
+
+enum Firmness {
+  SOFT
+  MEDIUM
+  FIRM
+  DUAL_COMFORT
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  code          String? // e.g. M-002
+  name          String
+  category      Category
+  tagline       String
+  description   String[] // paragraphs
+  features      String[] // short bullet points
+  firmness      Firmness
+  warrantyYears Int?
+  cloth         String?
+  badge         String?
+  featured      Boolean  @default(false)
+  active        Boolean  @default(true)
+  /// Customer must pick a cover colour (normally mattresses)
+  hasColours    Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  images         ProductImage[]
+  sizes          ProductSize[]
+  variants       ProductVariant[]
+  constructions  ProductConstruction[]
+  comfortOptions ComfortOption[]
+  colours        ProductColour[]
+  videos         Video[]
+  orderItems     OrderItem[]
+
+  @@index([active, sortOrder])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+
+  @@index([productId, sortOrder])
+}
+
+/// A size column of the price list, e.g. "72 x 36"
+model ProductSize {
+  id        String         @id @default(cuid())
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  sortOrder Int            @default(0)
+  prices    VariantPrice[]
+
+  @@unique([productId, label])
+}
+
+/// A price-list row: model + thickness, e.g. Royale · 4 inch (thickness 0 for pillows)
+model ProductVariant {
+  id        String         @id @default(cuid())
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  model     String
+  thickness Int            @default(0)
+  sortOrder Int            @default(0)
+  prices    VariantPrice[]
+
+  @@unique([productId, model, thickness])
+}
+
+/// MRP of one variant in one size (missing row = size not available for that variant)
+model VariantPrice {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sizeId    String
+  size      ProductSize    @relation(fields: [sizeId], references: [id], onDelete: Cascade)
+  mrp       Int
+
+  @@unique([variantId, sizeId])
+}
+
+/// "What's inside" explanations shown on the product page
+model ProductConstruction {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  detail    String
+  sortOrder Int     @default(0)
+}
+
+/// Comfort choices that don't change the price (e.g. Ortho-Bondo / Softy-Puff)
+model ComfortOption {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int     @default(0)
+
+  @@unique([productId, name])
+}
+
+model Colour {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  hex       String
+  active    Boolean         @default(true)
+  sortOrder Int             @default(0)
+  products  ProductColour[]
+}
+
+/// Colours offered for a product. No rows (and hasColours = true) = all active colours.
+model ProductColour {
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  colourId  String
+  colour    Colour  @relation(fields: [colourId], references: [id], onDelete: Cascade)
+
+  @@id([productId, colourId])
+}
+
+/// A YouTube video (youtubeId) or an uploaded file (fileUrl)
+model Video {
+  id        String   @id @default(cuid())
+  title     String
+  youtubeId String?
+  fileUrl   String?
+  posterUrl String?
+  isShort   Boolean  @default(false)
+  /// Shown as the big "guide" video on the videos page
+  featured  Boolean  @default(false)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([active, sortOrder])
+}
+
+model Coupon {
+  id        String    @id @default(cuid())
+  code      String    @unique // stored upper-case
+  percent   Int
+  active    Boolean   @default(true)
+  validFrom DateTime?
+  validTo   DateTime?
+  maxUses   Int?
+  usedCount Int       @default(0)
+  createdAt DateTime  @default(now())
+}
+
+/// Single row (id = 1) of store-wide settings
+model Setting {
+  id                  Int      @id @default(1)
+  gstPct              Int      @default(18)
+  offerPct            Int      @default(50)
+  deliveryPerPiece    Int      @default(500)
+  /// Pincodes starting with any of these get free delivery ("110" = Delhi)
+  freePincodePrefixes String[] @default(["110"])
+  updatedAt           DateTime @updatedAt
+}
+
+/* ───────────────────────────── Orders ───────────────────────────── */
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+/// A shopper. Signs in with an OTP sent to their mobile (SMS) or their email.
+model Customer {
+  id              String            @id @default(cuid())
+  name            String
+  /// 10-digit Indian mobile number, no +91
+  phone           String?           @unique
+  /// Stored lower-case
+  email           String?           @unique
+  /// Set when an OTP sent to this number was verified
+  phoneVerifiedAt DateTime?
+  /// Set when an OTP sent to this email was verified
+  emailVerifiedAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  orders          Order[]
+  sessions        CustomerSession[]
+}
+
+enum OtpChannel {
+  SMS
+  EMAIL
+}
+
+/// One-time sign-in codes sent by SMS or email (only a hash is stored)
+model OtpCode {
+  id         String     @id @default(cuid())
+  channel    OtpChannel
+  /// The mobile number or (lower-case) email the code was sent to
+  target     String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([channel, target, createdAt])
+}
+
+/// Customer sign-in sessions. `id` is the SHA-256 of the cookie token.
+model CustomerSession {
+  id         String   @id
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  orderNo      String      @unique // e.g. TYMWYPXB1K14
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  status       OrderStatus @default(NEW)
+  // Contact + address as given on this order
+  name         String
+  phone        String
+  email        String?
+  address      String
+  city         String
+  pincode      String
+  notes        String?
+  // Bill (rupees)
+  deliveryZone String // "delhi" | "outside"
+  pieces       Int
+  subtotal     Int
+  couponCode   String?
+  couponPct    Int         @default(0)
+  discount     Int         @default(0)
+  shipping     Int         @default(0)
+  gstPct       Int
+  gst          Int
+  total        Int
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  items      OrderItem[]
+  payments   Payment[]
+  statusLogs OrderStatusLog[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // Snapshot of what was bought
+  productSlug String
+  productName String
+  image       String
+  model       String
+  thickness   Int
+  size        String
+  comfort     String?
+  colour      String?
+  qty         Int
+  unitPrice   Int
+  lineTotal   Int
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  orderId    String
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method     PaymentMethod @default(UPI)
+  amount     Int
+  utr        String? // UPI / bank reference number
+  proofUrl   String? // screenshot
+  status     PaymentStatus @default(PENDING)
+  note       String?
+  verifiedAt DateTime?
+  createdAt  DateTime      @default(now())
+}
+
+model OrderStatusLog {
+  id        String       @id @default(cuid())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  from      OrderStatus?
+  to        OrderStatus
+  note      String?
+  adminId   String?
+  admin     AdminUser?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+}
+
+/* ───────────────────────────── Leads & admin ───────────────────────────── */
+
+enum EnquiryStatus {
+  NEW
+  CALLED
+  CLOSED
+}
+
+model Enquiry {
+  id          String        @id @default(cuid())
+  name        String
+  phone       String
+  email       String?
+  message     String
+  productSlug String?
+  status      EnquiryStatus @default(NEW)
+  createdAt   DateTime      @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum AdminRole {
+  OWNER
+  STAFF
+}
+
+model AdminUser {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  name         String
+  passwordHash String
+  role         AdminRole        @default(STAFF)
+  active       Boolean          @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime         @default(now())
+  statusLogs   OrderStatusLog[]
+  sessions     AdminSession[]
+}
+
+/// Admin sign-in sessions (used by @nestjs/authentication). `id` is the SHA-256 of the cookie token.
+model AdminSession {
+  id           String    @id
+  userId       String
+  user         AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime
+  expiresAt    DateTime
+  lastActiveAt DateTime
+  mfa          Json?
+  metadata     Json?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
