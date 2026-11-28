@@ -1,0 +1,38 @@
+# Render Blueprint: the NestJS backend (render.com → New → Blueprint → pick this repo).
+# The database is on Neon; paste its connection string into DATABASE_URL when Render asks.
+services:
+  - type: web
+    name: thankyoumattress-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    # dev dependencies (Nest CLI, Prisma CLI) are needed to build and to run migrations
+    buildCommand: npm ci --include=dev && npm run build
+    # apply any new database migrations, then start the API
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    healthCheckPath: /api/catalog
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        value: https://thankyoumattress.netlify.app
+      - key: ADMIN_URL
+        value: https://thankyoumattress-admin.netlify.app
+      # must be the same value as REVALIDATE_SECRET on the Netlify website
+      - key: REVALIDATE_SECRET
+        generateValue: true
+      - key: OTP_SECRET
+        generateValue: true
+      # none = mobile sign-in off until an SMS account (msg91 / fast2sms) is added
+      - key: SMS_PROVIDER
+        value: none
+      - key: MAIL_TRANSPORT
+        value: smtp
+      # e.g. smtps://you%40gmail.com:APP-PASSWORD@smtp.gmail.com:465 (a Gmail App Password)
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false

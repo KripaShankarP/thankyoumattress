@@ -47,8 +47,9 @@ export function Header() {
   useMotionValueEvent(scrollY, "change", (y) => {
     const prev = scrollY.getPrevious() ?? 0;
     setScrolled(y > 24);
-    setHidden(y > 320 && y > prev + 2 && !mega);
-    if (y < prev - 2) setHidden(false);
+    // Only a clear move changes it: smooth scrolling ends in sub-pixel steps that mustn't flip it back
+    if (y <= 320 || y < prev - 2) setHidden(false);
+    else if (y > prev + 2 && !mega) setHidden(true);
   });
 
   // Close menus on navigation — reacting to an external (router) change
@@ -201,18 +202,21 @@ export function Header() {
             <Menu className="size-5" />
           </button>
         </div>
+      </div>
 
-        {/* Mega menu */}
+      {/* Mega menu: a sibling of the bar, not inside it — the bar's backdrop-filter would keep this panel's blur from reaching the page */}
+      <div className="relative mx-auto max-w-[96rem]">
         <AnimatePresence>
           {mega && (
             <motion.div
-              initial={{ opacity: 0, y: -8, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -8, filter: "blur(6px)" }}
+              // no `filter` here: a filtered parent turns off the panel's backdrop blur, and the page showed through
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-x-0 top-full hidden origin-top pt-3 xl:block"
+              className="absolute inset-x-0 top-0 hidden origin-top pt-3 xl:block"
             >
-              <div className="ring-gradient grid grid-cols-12 gap-6 rounded-[2rem] bg-night/90 p-6 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+              <div className="ring-gradient grid grid-cols-12 gap-6 rounded-[2rem] bg-night/90 p-6 text-cream shadow-[0_40px_100px_-20px_rgba(0,0,0,0.7)] backdrop-blur-3xl backdrop-saturate-150">
                 <div className="col-span-7">
                   <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-cream/45">Mattress collection</p>
                   <div className="grid grid-cols-3 gap-1">

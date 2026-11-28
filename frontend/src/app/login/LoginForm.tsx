@@ -19,7 +19,8 @@ const input =
 async function post(path: string, body: unknown) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(errorMessage(data));
+  // a 5xx with no message means the backend itself couldn't be reached
+  if (!res.ok) throw new Error(errorMessage(data, res.status >= 500 ? "Our server isn't reachable right now. Please try again in a few minutes." : undefined));
   return data;
 }
 

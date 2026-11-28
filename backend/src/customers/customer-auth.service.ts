@@ -55,6 +55,7 @@ export class CustomerAuthService {
 
   /** Sends a 6-digit code by SMS or email; at most one per 30 s and five per hour per destination */
   async sendOtp(channel: OtpChannel, target: string, ip?: string) {
+    this.sender.assertAvailable(channel);
     const now = Date.now();
     const recent = await this.prisma.otpCode.findMany({
       where: { channel, target, createdAt: { gte: new Date(now - 3600_000) } },

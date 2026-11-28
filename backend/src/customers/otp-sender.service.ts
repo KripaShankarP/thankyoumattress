@@ -21,6 +21,11 @@ export class OtpSenderService {
     return channel === 'SMS' ? this.sms.printsCodes : this.config.get('MAIL_TRANSPORT') !== 'smtp';
   }
 
+  /** Throws when this channel can't deliver codes (mobile sign-in turned off) */
+  assertAvailable(channel: OtpChannel) {
+    if (channel === 'SMS') this.sms.assertEnabled();
+  }
+
   async send(channel: OtpChannel, target: string, code: string) {
     if (channel === 'SMS') return this.sms.sendOtp(target, code);
     try {

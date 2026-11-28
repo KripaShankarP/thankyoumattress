@@ -5,7 +5,6 @@ import { CartProvider } from "@/context/cart";
 import { CatalogProvider } from "@/context/catalog";
 import { CustomerProvider } from "@/context/customer";
 import { getCatalog } from "@/lib/api";
-import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
@@ -48,7 +47,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <CatalogProvider catalog={catalog}>
         <CustomerProvider>
         <CartProvider>
-          <AnnouncementBar />
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />

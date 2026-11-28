@@ -9,7 +9,7 @@ export class SmsService implements OnModuleInit {
   constructor(private readonly config: ConfigService) {}
 
   get provider() {
-    return this.config.get<'console' | 'msg91' | 'fast2sms'>('SMS_PROVIDER') ?? 'console';
+    return this.config.get<'console' | 'msg91' | 'fast2sms' | 'none'>('SMS_PROVIDER') ?? 'console';
   }
 
   /** In development the code is printed (and shown on the sign-in page) instead of sent */
@@ -19,14 +19,21 @@ export class SmsService implements OnModuleInit {
 
   onModuleInit() {
     if (this.provider === 'console' && this.config.get('NODE_ENV') === 'production')
-      throw new Error('SMS_PROVIDER=console is for development only: set msg91 or fast2sms so customers receive their sign-in codes');
-    const need: Record<string, string[]> = { msg91: ['MSG91_AUTH_KEY', 'MSG91_TEMPLATE_ID'], fast2sms: ['FAST2SMS_API_KEY'], console: [] };
+      throw new Error('SMS_PROVIDER=console is for development only: set msg91 or fast2sms (or none for email-only sign-in)');
+    const need: Record<string, string[]> = { msg91: ['MSG91_AUTH_KEY', 'MSG91_TEMPLATE_ID'], fast2sms: ['FAST2SMS_API_KEY'], console: [], none: [] };
     const missing = need[this.provider].filter((k) => !this.config.get(k));
     if (missing.length) throw new Error(`SMS_PROVIDER=${this.provider} needs ${missing.join(', ')} in .env`);
   }
 
   /** `phone` is a 10-digit Indian mobile number */
+  /** Throws when mobile sign-in is turned off (SMS_PROVIDER=none), before a code is made */
+  assertEnabled() {
+    if (this.provider === 'none')
+      throw new ServiceUnavailableException('Sign-in by mobile number isn’t available yet. Please use the Email option.');
+  }
+
   async sendOtp(phone: string, code: string) {
+    this.assertEnabled();
     if (this.provider === 'console') {
       this.logger.warn(`Sign-in code for ${phone}: ${code}  (SMS_PROVIDER=console — not sent)`);
       return;

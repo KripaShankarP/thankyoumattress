@@ -11,8 +11,8 @@ export const envSchema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   /** Secret mixed into OTP hashes (32+ characters) */
   OTP_SECRET: z.string().min(32),
-  /** How sign-in codes are sent: console (development only), msg91 or fast2sms */
-  SMS_PROVIDER: z.enum(['console', 'msg91', 'fast2sms']).default('console'),
+  /** How sign-in codes are sent: console (development only), msg91 or fast2sms; none turns mobile sign-in off (email only) */
+  SMS_PROVIDER: z.enum(['console', 'msg91', 'fast2sms', 'none']).default('console'),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),
   FAST2SMS_API_KEY: z.string().optional(),

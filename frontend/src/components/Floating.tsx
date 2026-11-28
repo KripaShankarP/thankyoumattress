@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Gift, X } from "lucide-react";
+import { Gift, Truck, X } from "lucide-react";
 import { site } from "@/data/site";
 import { BrandIcon } from "./SocialIcons";
 
@@ -28,7 +28,7 @@ export function WhatsAppButton() {
 
 const SEEN = "ty-offer-seen";
 
-/** Festive offer popup, shown once per browser session after a short delay */
+/** The 50% offer popup: shown as soon as a visitor arrives, once per visit (browser session) */
 export function OfferPopup() {
   const [open, setOpen] = useState(false);
 
@@ -38,7 +38,7 @@ export function OfferPopup() {
       seen = sessionStorage.getItem(SEEN) === "1";
     } catch {}
     if (seen) return;
-    const t = setTimeout(() => setOpen(true), 7000);
+    const t = setTimeout(() => setOpen(true), 1200);
     return () => clearTimeout(t);
   }, []);
 
@@ -84,8 +84,8 @@ export function OfferPopup() {
             <p className="relative mt-2 font-display text-5xl leading-none">
               FLAT <span className="text-gradient">50%</span> OFF
             </p>
-            <p className="relative mt-3 text-sm text-cream/70">
-              Factory-direct prices on every mattress. Use code <b className="text-gold">WELCOME5</b> for an extra 5% off at checkout.
+            <p className="relative mx-auto mt-5 flex w-fit items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold ring-1 ring-inset ring-white/10">
+              <Truck className="size-4 text-gold" /> Free delivery in Delhi
             </p>
             <Link href="/shop" onClick={close} className="relative mt-6 inline-block rounded-full bg-brand px-8 py-3.5 font-semibold transition hover:bg-brand-dark">
               Shop the sale
